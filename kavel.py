@@ -41,16 +41,16 @@ class Kavel:
         Get manipulation order list from order string
         '''
         if manipulation_order == "":
-            manipulation_order = Kavel().default_manipulation_order
+            manipulation_order = Kavel.default_manipulation_order
 
         orders = []
 
         for order in manipulation_order.split('_'):
-            if order in Kavel().manipulation_orders.keys():
+            if order in Kavel.manipulation_orders.keys():
                 orders.append(order)
 
         if len(orders) < 1:
-            orders = Kavel().default_manipulation_order.split('_')
+            orders = Kavel.default_manipulation_order.split('_')
         
         return orders
 
@@ -88,56 +88,56 @@ class Kavel:
             print('start_frame: {}'.format(start_frame))
             print('end_frame: {}'.format(end_frame or len(wavedata)))
 
-            orders = Kavel().get_mainpulation_order(manipulation_order)
+            orders = Kavel.get_mainpulation_order(manipulation_order)
                         
             print('Manipulation order: {!s}'.format('_'.join(orders)))
 
             print('Correcting input data layout: {} frames'.format(len(wavedata)))
             
-            frames = Kavel().get_two_track_frame_list_from_pairs(wavedata)
+            frames = Kavel.get_two_track_frame_list_from_pairs(wavedata)
 
             output_decorations = ''
 
             for order in orders:
                 if order == "b" and braid:
                     output_decorations = output_decorations + '_b{}'.format(braid_on)
-                    frames = Kavel().braid_frames(frames, braid_on)
+                    frames = Kavel.braid_frames(frames, braid_on)
 
                 elif order == "ro" and reverse_on > 0:
                     output_decorations = output_decorations + '_ro{}'.format(reverse_on)
-                    frames = Kavel().reverse_on_frame(frames, reverse_on)
+                    frames = Kavel.reverse_on_frame(frames, reverse_on)
 
                 elif order == "r" and reverse_input:
                     output_decorations = output_decorations + '_r'
-                    frames = Kavel().reverse_frames(frames)
+                    frames = Kavel.reverse_frames(frames)
 
                 elif order == "rl" and reverse_input_left:
                     output_decorations = output_decorations + '_rl'
-                    frames = Kavel().reverse_frames_left_channel(frames)
+                    frames = Kavel.reverse_frames_left_channel(frames)
 
                 elif order == "rr" and reverse_input_right:
                     output_decorations = output_decorations + '_rr'
-                    frames = Kavel().reverse_frames_right_channel(frames)
+                    frames = Kavel.reverse_frames_right_channel(frames)
                 
                 elif order == "mx" and max_on_slice > 0:
                     output_decorations = output_decorations + '_mx{}'.format(max_on_slice)
-                    frames = Kavel().max_on_slice_frame(frames, max_on_slice)
+                    frames = Kavel.max_on_slice_frame(frames, max_on_slice)
                 
                 elif order == "mi" and min_on_slice > 0:
                     output_decorations = output_decorations + '_mi{}'.format(min_on_slice)
-                    frames = Kavel().min_on_slice_frame(frames, min_on_slice)
+                    frames = Kavel.min_on_slice_frame(frames, min_on_slice)
                 
                 elif order == "av" and average_on_slice > 0:
                     output_decorations = output_decorations + '_av{}'.format(average_on_slice)
-                    frames = Kavel().average_on_slice_frame(frames, average_on_slice)
+                    frames = Kavel.average_on_slice_frame(frames, average_on_slice)
                 
                 elif order == "me" and median_on_slice > 0:
                     output_decorations = output_decorations + '_me{}'.format(median_on_slice)
-                    frames = Kavel().median_on_slice_frame(frames, median_on_slice)
+                    frames = Kavel.median_on_slice_frame(frames, median_on_slice)
                 
                 elif order == "c" and chop_frames > 0:
                     output_decorations = output_decorations + '_c{}'.format(chop_frames)
-                    frames = Kavel().chop_every_on_frame(frames, chop_frames)
+                    frames = Kavel.chop_every_on_frame(frames, chop_frames)
 
             wavedata = array(frames)
 
@@ -553,8 +553,8 @@ if __name__ == "__main__":
         "--manipulation_order", 
         dest="manipulation_order", 
         type="string", 
-        help="Manipulation order, default is {!r}".format(Kavel().default_manipulation_order), 
-        default=Kavel().default_manipulation_order
+        help="Manipulation order, default is {!r}".format(Kavel.default_manipulation_order), 
+        default=Kavel.default_manipulation_order
         )
     parser.add_option("--show_manipulation_order_list", action="store_true", dest="show_manipulation_order_list", help="Print manipulation order helper list and then exit", default=False)
     parser.add_option("-i", "--input_file_stat", action="store_true", dest="input_file_stat", help="Print inputfile stat and then exit", default=False)
@@ -565,10 +565,10 @@ if __name__ == "__main__":
 
     if options.show_manipulation_order_list:
         print('\nManipulation order list:\n')
-        for key, desc in Kavel().manipulation_orders.items():
+        for key, desc in Kavel.manipulation_orders.items():
             print('{} - {}'.format(key, desc))
         
-        print('\nDefault order: {}'.format(Kavel().default_manipulation_order))
+        print('\nDefault order: {}'.format(Kavel.default_manipulation_order))
         sys.exit(0)
 
     elif options.list_supported_types:
@@ -589,7 +589,7 @@ if __name__ == "__main__":
     else:
         outputfile = args[1]
 
-    (samplerate, smp, output_decorations) = Kavel().load_frames_from_file(
+    (samplerate, smp, output_decorations) = Kavel.load_frames_from_file(
         args[0], 
         options.start_frame, 
         options.end_frame, 
@@ -618,10 +618,10 @@ if __name__ == "__main__":
 
         outputfile = get_output_file_name(args[0], outputfile, output_decorations, options.output_name)
 
-        Paulstretch().paulstretch(samplerate, smp, options.stretch_amount, options.window_size, outputfile)
+        Paulstretch.paulstretch(samplerate, smp, options.stretch_amount, options.window_size, outputfile)
     else:
         # Output file after manipulation
-        frames = Kavel().get_pair_frame_list_from_two_track(smp)
+        frames = Kavel.get_pair_frame_list_from_two_track(smp)
 
         outputfile = get_output_file_name(args[0], outputfile, output_decorations, options.output_name)
 
