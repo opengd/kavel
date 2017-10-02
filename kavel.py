@@ -14,6 +14,10 @@ from numpy import *
 from optparse import OptionParser, OptionGroup
 from datetime import datetime
 
+plot_onsets=False
+if plot_onsets:
+    import matplotlib.pyplot as plt
+
 class Kavel:
     '''
     Kavel - audio manipulation tool
@@ -79,22 +83,22 @@ class Kavel:
             print('\n#Input\n')
             print(sf.info(filename), True)
             
-            wavedata, samplerate = sf.read(filename, start=start_frame, stop=end_frame)
+            sample_data, samplerate = sf.read(filename, start=start_frame, stop=end_frame)
         except:
             print('Error loading file: {!s} {!r}'.format(filename, sys.exc_info()[0]))
             return None
         else:
-            print('frames read: {}'.format(len(wavedata)))
+            print('frames read: {}'.format(len(sample_data)))
             print('start_frame: {}'.format(start_frame))
-            print('end_frame: {}'.format(end_frame or len(wavedata)))
+            print('end_frame: {}'.format(end_frame or len(sample_data)))
 
             orders = Kavel.get_mainpulation_order(manipulation_order)
                         
             print('Manipulation order: {!s}'.format('_'.join(orders)))
 
-            print('Correcting input data layout: {} frames'.format(len(wavedata)))
+            print('Correcting input data layout: {} frames'.format(len(sample_data)))
             
-            frames = Kavel.get_two_track_frame_list_from_pairs(wavedata)
+            frames = Kavel.get_two_track_frame_list_from_pairs(sample_data)
 
             output_decorations = ''
 
@@ -139,11 +143,11 @@ class Kavel:
                     output_decorations = output_decorations + '_c{}'.format(chop_frames)
                     frames = Kavel.chop_every_on_frame(frames, chop_frames)
 
-            wavedata = array(frames)
+            sample_data = array(frames)
 
-            print('{} frames corrected'.format(len(wavedata[0])))
+            print('{} frames corrected'.format(len(sample_data[0])))
 
-            return (samplerate, wavedata, output_decorations)
+            return (samplerate, sample_data, output_decorations)
     
     @staticmethod
     def get_two_track_frame_list_from_pairs(frames):
@@ -400,13 +404,11 @@ class Paulstretch:
         return orig_n
     
     @staticmethod
-    def paulstretch(samplerate, smp, stretch, windowsize_seconds, outfilename):
-        print("Paul's Extreme Sound Stretch (Paulstretch) - Python version 20141220")
-        print("by Nasca Octavian PAUL, Targu Mures, Romania\n")
+    def paulstretch(samplerate, smp, stretch, windowsize_seconds, onset_level, outfilename):
+        if plot_onsets:
+            onsets=[]
         
         nchannels = smp.shape[0]
-
-        print('\n#Streching\n')
 
         print('output file: {!s}\nsamplerate: {} Hz\nchannels: {}\n'.format(outfilename, samplerate, nchannels))
         outfile = sf.SoundFile(outfilename, 'w', samplerate, nchannels)
@@ -415,13 +417,12 @@ class Paulstretch:
         windowsize = int(windowsize_seconds*samplerate)
         if windowsize < 16:
             windowsize = 16
-        windowsize = Paulstretch().optimize_windowsize(windowsize)
+        windowsize = Paulstretch.optimize_windowsize(windowsize)
         windowsize = int(windowsize/2) * 2
         half_windowsize = int(windowsize/2)
 
         #correct the end of the smp
         nsamples = smp.shape[1]
-
         end_size = int(samplerate*0.05)
         if end_size < 16:
             end_size = 16
@@ -431,69 +432,123 @@ class Paulstretch:
         
         #compute the displacement inside the input file
         start_pos = 0.0
-        displace_pos = (windowsize*0.5) / stretch
+        displace_pos = windowsize * 0.5
 
-        #create Window window
-    #    window=0.5-cos(arange(windowsize,dtype='float')*2.0*pi/(windowsize-1))*0.5
-
-        window = pow(1.0-pow(linspace(-1.0, 1.0, windowsize), 2.0), 1.25)
+        #create Hann window
+        window = 0.5 - cos(arange(windowsize, dtype='float')*2.0* pi/(windowsize-1)) * 0.5
 
         old_windowed_buf = zeros((2, windowsize))
-    #    hinv_sqrt2=(1+sqrt(0.5))*0.5
-    #    hinv_buf=2.0*(hinv_sqrt2-(1.0-hinv_sqrt2)*cos(arange(half_windowsize,dtype='float')*2.0*pi/half_windowsize))/hinv_sqrt2
-        
+        hinv_sqrt2 = (1+sqrt(0.5)) * 0.5
+        hinv_buf = 2.0 *(hinv_sqrt2-(1.0-hinv_sqrt2) * cos(arange(half_windowsize, dtype='float')*2.0*pi/half_windowsize))/hinv_sqrt2
+
+        freqs = zeros((2, half_windowsize+1))
+        old_freqs = freqs
+
+        num_bins_scaled_freq = 32
+        freqs_scaled = zeros(num_bins_scaled_freq)
+        old_freqs_scaled = freqs_scaled
+
+        displace_tick =0.0
+        displace_tick_increase =1.0/stretch
+        if displace_tick_increase > 1.0:
+            displace_tick_increase = 1.0
+        extra_onset_time_credit = 0.0
+        get_next_buf = True
         start_time = datetime.now()
         
         while True:
-            #get the windowed buffer
-            istart_pos = int(floor(start_pos))
-            buf = smp[:,istart_pos:istart_pos+windowsize]
-            if buf.shape[1] < windowsize:
-                buf=append(buf, zeros((2, windowsize-buf.shape[1])), 1)
-            buf = buf * window
+            if get_next_buf:
+                old_freqs = freqs
+                old_freqs_scaled = freqs_scaled
+
+                #get the windowed buffer
+                istart_pos =int(floor(start_pos))
+                buf = smp[:, istart_pos:istart_pos+windowsize]
+                if buf.shape[1] < windowsize:
+                    buf = append(buf, zeros((2, windowsize-buf.shape[1])), 1)
+                buf= buf * window
         
-            #get the amplitudes of the frequency components and discard the phases
-            freqs = abs(fft.rfft(buf))
+                #get the amplitudes of the frequency components and discard the phases
+                freqs = abs(fft.rfft(buf))
+
+                #scale down the spectrum to detect onsets
+                freqs_len = freqs.shape[1]
+                if num_bins_scaled_freq < freqs_len:
+                    freqs_len_div = freqs_len // num_bins_scaled_freq
+                    new_freqs_len = freqs_len_div * num_bins_scaled_freq
+                    freqs_scaled = mean(mean(freqs, 0)[:new_freqs_len].reshape([num_bins_scaled_freq, freqs_len_div]), 1)
+                else:
+                    freqs_scaled = zeros(num_bins_scaled_freq)
+
+
+                #process onsets
+                m = 2.0*mean(freqs_scaled-old_freqs_scaled)/(mean(abs(old_freqs_scaled))+1e-3)
+                if m < 0.0:
+                    m = 0.0
+                if m > 1.0:
+                    m = 1.0
+                if plot_onsets:
+                    onsets.append(m)
+                if m > onset_level:
+                    displace_tick = 1.0
+                    extra_onset_time_credit += 1.0
+
+            cfreqs = (freqs*displace_tick) + (old_freqs*(1.0-displace_tick))
 
             #randomize the phases by multiplication with a random complex number with modulus=1
-            ph = random.uniform(0,2*pi, (nchannels,freqs.shape[1])) * 1j
-            freqs = freqs * exp(ph)
+            ph = random.uniform(0, 2*pi, (nchannels, cfreqs.shape[1]))*1j
+            cfreqs = cfreqs*exp(ph)
 
             #do the inverse FFT 
-            buf = fft.irfft(freqs)
+            buf = fft.irfft(cfreqs)
 
             #window again the output buffer
             buf *= window
 
             #overlap-add the output
-            output = buf[:,0:half_windowsize] + old_windowed_buf[:,half_windowsize:windowsize]
+            output = buf[:, 0:half_windowsize]+old_windowed_buf[:, half_windowsize:windowsize]
             old_windowed_buf = buf
 
             #remove the resulted amplitude modulation
-            #update: there is no need to the new windowing function
-            #output*=hinv_buf
+            output *= hinv_buf
             
             #clamp the values to -1..1 
             output[output>1.0] = 1.0
             output[output<-1.0] = -1.0
 
-            
             #write the output to wav file
             d = int16(output.ravel(1)*32767.0)
             d = array_split(d, len(d)/2)
 
             outfile.write(d)
 
-            start_pos += displace_pos
+            if get_next_buf:
+                start_pos += displace_pos
+
+            get_next_buf=False
+
             if start_pos >= nsamples:
                 print("100 %")
                 break
-            
             sys.stdout.write('{} % \r'.format(int(100.0*start_pos/nsamples)))
             sys.stdout.flush()
 
+            
+            if extra_onset_time_credit <= 0.0:
+                displace_tick += displace_tick_increase
+            else:
+                credit_get = 0.5*displace_tick_increase #this must be less than displace_tick_increase
+                extra_onset_time_credit -= credit_get
+                if extra_onset_time_credit < 0:
+                    extra_onset_time_credit = 0
+                displace_tick += displace_tick_increase-credit_get
+
+            if displace_tick >= 1.0:
+                displace_tick =displace_tick % 1.0
+                get_next_buf = True
+
         outfile.close()
-        print('Streched in: {}'.format(datetime.now() - start_time))
+        print('Stretching completed in: {}'.format(datetime.now() - start_time))
 
 ########################################
 
@@ -530,6 +585,7 @@ if __name__ == "__main__":
     paulstrech_options.add_option("-s", "--stretch", action="store_true", dest="stretch", help="Stretch using Paul's Extreme Sound Stretch (Paulstretch)", default=False)
     paulstrech_options.add_option("--stretch_amount", dest="stretch_amount", help="stretch amount (1.0 = no stretch), above 0.0", type="float", default=8.0)
     paulstrech_options.add_option("--window_size", dest="window_size", help="window size (seconds), above 0.001", type="float", default=0.25)
+    paulstrech_options.add_option("--onset", dest="onset", help="onset sensitivity (0.0=max,1.0=min)", type="float", default=10.0)
     parser.add_option_group(paulstrech_options)
     
     input_mani_options = OptionGroup(parser, 'Input File Manipulation Options')
@@ -612,13 +668,20 @@ if __name__ == "__main__":
 
     if options.stretch and (options.stretch_amount > 0.0) and (options.window_size > 0.001):
         # Stretch audio data using paulstretch
-        output_decorations = output_decorations + '_s{}_w{}'.format(options.stretch_amount, options.window_size)
+        output_decorations = output_decorations + '_s{}_w{}_o{}'.format(options.stretch_amount, options.window_size, options.onset)
+        
+        print('\n#Streching\n')
+
+        print("Paul's Extreme Sound Stretch (Paulstretch) - Python version 20141220")
+        print("by Nasca Octavian PAUL, Targu Mures, Romania\n")
+        
         print('stretch amount = {}'.format(options.stretch_amount))
         print('window size = {} seconds'.format(options.window_size))
-
+        print('onset sensitivity = {}'.format(options.onset))
+        
         outputfile = get_output_file_name(args[0], outputfile, output_decorations, options.output_name)
 
-        Paulstretch.paulstretch(samplerate, smp, options.stretch_amount, options.window_size, outputfile)
+        Paulstretch.paulstretch(samplerate, smp, options.stretch_amount, options.window_size, options.onset, outputfile)
     else:
         # Output file after manipulation
         frames = Kavel.get_pair_frame_list_from_two_track(smp)
