@@ -14,10 +14,6 @@ from numpy import *
 from optparse import OptionParser, OptionGroup
 from datetime import datetime
 
-plot_onsets=False
-if plot_onsets:
-    import matplotlib.pyplot as plt
-
 class Kavel:
     '''
     Kavel - audio manipulation tool
@@ -405,8 +401,6 @@ class Paulstretch:
     
     @staticmethod
     def paulstretch(samplerate, smp, stretch, windowsize_seconds, onset_level, outfilename):
-        if plot_onsets:
-            onsets=[]
         
         nchannels = smp.shape[0]
 
@@ -487,8 +481,6 @@ class Paulstretch:
                     m = 0.0
                 if m > 1.0:
                     m = 1.0
-                if plot_onsets:
-                    onsets.append(m)
                 if m > onset_level:
                     displace_tick = 1.0
                     extra_onset_time_credit += 1.0
