@@ -448,8 +448,8 @@ class Paulstretch:
         freqs_scaled = zeros(num_bins_scaled_freq)
         old_freqs_scaled = freqs_scaled
 
-        displace_tick =0.0
-        displace_tick_increase =1.0/stretch
+        displace_tick = 0.0
+        displace_tick_increase = 1.0/stretch
         if displace_tick_increase > 1.0:
             displace_tick_increase = 1.0
         extra_onset_time_credit = 0.0
