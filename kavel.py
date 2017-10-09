@@ -30,10 +30,12 @@ class Kavel:
         "mi": "min on frame slice",
         "av": "average on frame slice",
         "me": "median on frame slice",
-        "c": "chop frames"
+        "c": "chop frames",
+        "d": "duplicate frames",
+        "dc": "duplicate counter",
     }
 
-    default_manipulation_order = "b_ro_r_rl_rr_mx_mi_av_me_c"
+    default_manipulation_order = "b_ro_r_rl_rr_mx_mi_av_me_c_d_dc"
 
     @staticmethod
     def get_mainpulation_order(manipulation_order):
@@ -69,7 +71,9 @@ class Kavel:
         min_on_slice,
         average_on_slice,
         median_on_slice,
-        chop_frames, 
+        chop_frames,
+        duplicate_frames, 
+        duplicate_counter,
         manipulation_order
         ):
         '''
@@ -138,6 +142,10 @@ class Kavel:
                 elif order == "c" and chop_frames > 0:
                     output_decorations = output_decorations + '_c{}'.format(chop_frames)
                     frames = Kavel.chop_every_on_frame(frames, chop_frames)
+                
+                elif order == "d" and duplicate_frames > 0 and duplicate_counter > 0:
+                    output_decorations = output_decorations + '_d{}_dc{}'.format(duplicate_frames, duplicate_counter)
+                    frames = Kavel.duplicate_every_on_slize_frame(frames, duplicate_frames, duplicate_counter)
 
             sample_data = array(frames)
 
@@ -277,15 +285,39 @@ class Kavel:
     
     @staticmethod
     def chop_every_on_frame(frames, chop_frames):
+        print('Chop on slice of {} frame'.format(chop_frames))
         r_buf = [[], []]
         chop_counter = 0
         for i in range(len(frames[0])):
             if chop_counter != chop_frames:
                 r_buf[0].append(frames[0][i])
-                r_buf[1].append(frames[0][i])
+                r_buf[1].append(frames[1][i])
                 chop_counter += 1
             else:
                 chop_counter = 0
+        
+        return r_buf
+
+    @staticmethod
+    def duplicate_every_on_slize_frame(frames, duplicate_frames, duplications = 1):
+        print('Duplicate on slice of {} frame, do {} duplications'.format(duplicate_frames, duplications))
+        r_buf = [[], []]
+        dup_buf = [[], []]
+        duplicate_counter = 0
+        for i in range(len(frames[0])):
+            r_buf[0].append(frames[0][i])
+            r_buf[1].append(frames[1][i])
+            dup_buf[0].append(frames[0][i])
+            dup_buf[1].append(frames[1][i])
+            if i == len(frames[0]) or duplicate_counter == duplicate_frames:
+                for r in range(duplications):
+                    r_buf[0].extend(dup_buf[0])
+                    r_buf[1].extend(dup_buf[1])
+
+                dup_buf = [[], []]
+                duplicate_counter = 0
+            else:
+                duplicate_counter += 1
         
         return r_buf
 
@@ -568,9 +600,22 @@ def get_output_file_name(input_file, output_file, output_decorations, output_nam
 
     return outputfile
 
+class MyOptionGroup(OptionGroup):
+    def format_description(self, formatter):
+        '''
+        text_width = max(self.width - self.current_indent, 11)
+        indent = " "*self.current_indent
+        return textwrap.fill(self.description,
+                             text_width,
+                             initial_indent=indent,
+                             subsequent_indent=indent)
+        '''
+        return self.description
+
 if __name__ == "__main__":
     print('Kavel - audio manipulation tool')
     print('by Erik Johansson @ 2017 http://github.com/opengd/kavel')
+
     parser = OptionParser(usage="usage: %prog [options] input_file output_file(optional)")
 
     paulstrech_options = OptionGroup(parser, 'Paulstrech Options')
@@ -579,8 +624,13 @@ if __name__ == "__main__":
     paulstrech_options.add_option("--window_size", dest="window_size", help="window size (seconds), above 0.001", type="float", default=0.25)
     paulstrech_options.add_option("--onset", dest="onset", help="onset sensitivity (0.0=max,1.0=min)", type="float", default=10.0)
     parser.add_option_group(paulstrech_options)
-    
-    input_mani_options = OptionGroup(parser, 'Input File Manipulation Options')
+
+    man_ordes = ''
+    '''
+    for cmd, desc in Kavel.manipulation_orders.items():
+        man_ordes = '{}\n{} - {}'.format(man_ordes, cmd, desc)
+    '''
+    input_mani_options = MyOptionGroup(parser, 'Input File Manipulation Options', man_ordes)
     input_mani_options.add_option("-t", "--start_frame", dest="start_frame", help="Start read on frame", type="int", default=0)
     input_mani_options.add_option("-e", "--end_frame", dest="end_frame", help="End read on frame", type="int", default=None)
     input_mani_options.add_option("-r", "--reverse", action="store_true", dest="reverse_input", help="Reverse input file", default=False)
@@ -594,6 +644,8 @@ if __name__ == "__main__":
     input_mani_options.add_option("--average_on_slice", dest="average_on_slice", help="Change all frames on slice to the average value in frame slice", type="int", default=0)
     input_mani_options.add_option("--median_on_slice", dest="median_on_slice", help="Change all frames on slice to the median value in frame slice", type="int", default=0)
     input_mani_options.add_option("--chop", dest="chop_frames", help="Chop frames", type="int", default=0)
+    input_mani_options.add_option("--duplicate", dest="duplicate_frames", help="Duplicate frames, value is slice size", type="int", default=0)
+    input_mani_options.add_option("--duplicate_counter", dest="duplicate_counter", help="Do number of duplications frames, default is 1", type="int", default=1)
     parser.add_option_group(input_mani_options)
 
     parser.add_option(
@@ -652,6 +704,8 @@ if __name__ == "__main__":
         options.average_on_slice,
         options.median_on_slice,
         options.chop_frames,
+        options.duplicate_frames,
+        options.duplicate_counter,
         options.manipulation_order
         )
 
