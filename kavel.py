@@ -13,6 +13,12 @@ import soundfile as sf
 from numpy import *
 from optparse import OptionParser, OptionGroup
 from datetime import datetime
+from enum import Enum
+
+class SortTypes(Enum):
+    ASC = 0
+    DESC = 1
+    MIX = 2
 
 class Kavel:
     '''
@@ -33,9 +39,12 @@ class Kavel:
         "c": "chop frames",
         "d": "duplicate frames",
         "dc": "duplicate counter",
+        "sa": "sort asc",
+        "sd": "sort desc",
+        "sm": "sort mixed",
     }
 
-    default_manipulation_order = "b_ro_r_rl_rr_mx_mi_av_me_c_d_dc"
+    default_manipulation_order = "b_ro_r_rl_rr_mx_mi_av_me_c_d_dc_sa_sd_sm"
 
     @staticmethod
     def get_mainpulation_order(manipulation_order):
@@ -74,6 +83,9 @@ class Kavel:
         chop_frames,
         duplicate_frames, 
         duplicate_counter,
+        sort_asc,
+        sort_desc,
+        sort_mixed,
         manipulation_order
         ):
         '''
@@ -146,6 +158,18 @@ class Kavel:
                 elif order == "d" and duplicate_frames > 0 and duplicate_counter > 0:
                     output_decorations = output_decorations + '_d{}_dc{}'.format(duplicate_frames, duplicate_counter)
                     frames = Kavel.duplicate_every_on_slize_frame(frames, duplicate_frames, duplicate_counter)
+
+                elif order == "sa" and sort_asc > 0:
+                    output_decorations = output_decorations + '_sa{}'.format(sort_asc)
+                    frames = Kavel.sort_frame_slice(frames, sort_asc, SortTypes.ASC)
+        
+                elif order == "sd" and sort_desc > 0:
+                    output_decorations = output_decorations + '_sd{}'.format(sort_desc)
+                    frames = Kavel.sort_frame_slice(frames, sort_desc, SortTypes.DESC)
+
+                elif order == "sm" and sort_mixed > 0:
+                    output_decorations = output_decorations + '_sm{}'.format(sort_mixed)
+                    frames = Kavel.sort_frame_slice(frames, sort_mixed, SortTypes.MIX)
 
             sample_data = array(frames)
 
@@ -304,6 +328,7 @@ class Kavel:
         r_buf = [[], []]
         dup_buf = [[], []]
         duplicate_counter = 0
+
         for i in range(len(frames[0])):
             r_buf[0].append(frames[0][i])
             r_buf[1].append(frames[1][i])
@@ -328,10 +353,7 @@ class Kavel:
         i = 0
         b_c_l = 0
         b_c_r = 1
-        #for a in frames:
         for f in range(len(frames[0])):
-            #ar[b_c_l].append(a[0])
-            #ar[b_c_r].append(a[1])
             ar[b_c_l].append(frames[0][f])
             ar[b_c_r].append(frames[1][f])
             i = i + 1
@@ -393,6 +415,36 @@ class Kavel:
         print('Reverse right channel on input file')
         frames[1] = frames[1][::-1]
         return frames
+
+    @staticmethod
+    def sort_frame_slice(frames, sort_size, sort_type = SortTypes.ASC):
+        print('Sort frame slice of {} frame'.format(sort_size))
+        r_buf = [[], []]
+        dup_buf = [[], []]
+        sort_counter = 0
+        mix_changer = False
+        for i in range(len(frames[0])):
+            dup_buf[0].append(frames[0][i])
+            dup_buf[1].append(frames[1][i])
+            if i == len(frames[0]) or sort_counter == sort_size:
+                if (sort_type == SortTypes.ASC) or (sort_type == SortTypes.MIX and mix_changer):
+                    dup_buf[0] = sorted(dup_buf[0])
+                    dup_buf[1] = sorted(dup_buf[1])
+                    mix_changer = False
+                elif (sort_type == SortTypes.DESC) or (sort_type == SortTypes.MIX and not mix_changer):
+                    dup_buf[0] = sorted(dup_buf[0], reverse=True)
+                    dup_buf[1] = sorted(dup_buf[1], reverse=True)
+                    mix_changer = True
+
+                r_buf[0].extend(dup_buf[0])
+                r_buf[1].extend(dup_buf[1])
+
+                dup_buf = [[], []]
+                sort_counter = 0
+            else:
+                sort_counter += 1
+        
+        return r_buf
 
 class Paulstretch:
     '''
@@ -646,6 +698,9 @@ if __name__ == "__main__":
     input_mani_options.add_option("--chop", dest="chop_frames", help="Chop frames", type="int", default=0)
     input_mani_options.add_option("--duplicate", dest="duplicate_frames", help="Duplicate frames, value is slice size", type="int", default=0)
     input_mani_options.add_option("--duplicate_counter", dest="duplicate_counter", help="Do number of duplications frames, default is 1", type="int", default=1)
+    input_mani_options.add_option("--sort_asc", dest="sort_asc", help="Sort frame slice ascended, value is slice size", type="int", default=0)
+    input_mani_options.add_option("--sort_desc", dest="sort_desc", help="Sort frame slice descending, value is slice size", type="int", default=0)
+    input_mani_options.add_option("--sort_mixed", dest="sort_mixed", help="Sort frame slice mixed descending and ascended, value is slice size", type="int", default=0)
     parser.add_option_group(input_mani_options)
 
     parser.add_option(
@@ -706,6 +761,9 @@ if __name__ == "__main__":
         options.chop_frames,
         options.duplicate_frames,
         options.duplicate_counter,
+        options.sort_asc,
+        options.sort_desc,
+        options.sort_mixed,
         options.manipulation_order
         )
 
