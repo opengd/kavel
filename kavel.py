@@ -37,14 +37,14 @@ class Kavel:
         "av": "average on frame slice",
         "me": "median on frame slice",
         "c": "chop frames",
-        "d": "duplicate frames",
-        "dc": "duplicate counter",
+        "d": "duplicate counter",
+        "ds": "duplicate slice",
         "sa": "sort asc",
         "sd": "sort desc",
         "sm": "sort mixed",
     }
 
-    default_manipulation_order = "b_ro_r_rl_rr_mx_mi_av_me_c_d_dc_sa_sd_sm"
+    default_manipulation_order = "b_ro_r_rl_rr_mx_mi_av_me_c_d_sa_sd_sm"
 
     @staticmethod
     def get_mainpulation_order(manipulation_order):
@@ -81,8 +81,9 @@ class Kavel:
         average_on_slice,
         median_on_slice,
         chop_frames,
-        duplicate_frames, 
-        duplicate_counter,
+        chop_slice,
+        duplicate_counter, 
+        duplicate_slice,
         sort_asc,
         sort_desc,
         sort_mixed,
@@ -151,13 +152,13 @@ class Kavel:
                     output_decorations = output_decorations + '_me{}'.format(median_on_slice)
                     frames = Kavel.median_on_slice_frame(frames, median_on_slice)
                 
-                elif order == "c" and chop_frames > 0:
-                    output_decorations = output_decorations + '_c{}'.format(chop_frames)
-                    frames = Kavel.chop_every_on_frame(frames, chop_frames)
+                elif order == "c" and chop_frames > 0 and chop_slice > 0:
+                    output_decorations = output_decorations + '_c{}_cs{}'.format(chop_frames, chop_slice)
+                    frames = Kavel.chop_every_on_frame(frames, chop_frames, chop_slice)
                 
-                elif order == "d" and duplicate_frames > 0 and duplicate_counter > 0:
-                    output_decorations = output_decorations + '_d{}_dc{}'.format(duplicate_frames, duplicate_counter)
-                    frames = Kavel.duplicate_every_on_slize_frame(frames, duplicate_frames, duplicate_counter)
+                elif order == "d" and duplicate_counter > 0 and duplicate_slice > 0:
+                    output_decorations = output_decorations + '_d{}_ds{}'.format(duplicate_counter, duplicate_slice)
+                    frames = Kavel.duplicate_slice_on_frame(frames, duplicate_counter, duplicate_slice)
 
                 elif order == "sa" and sort_asc > 0:
                     output_decorations = output_decorations + '_sa{}'.format(sort_asc)
@@ -206,8 +207,8 @@ class Kavel:
         while i < len(frames[0]):
             l.append(frames[0][i])
             r.append(frames[1][i])
-            i = i + 1
-            slice_counter = slice_counter + 1
+            i += 1
+            slice_counter += 1
             if (i == len(frames[0])) or slice_counter == max_on_slice:
                 max_frame_l = max(l)
                 max_frame_r = max(r)
@@ -234,8 +235,8 @@ class Kavel:
         while i < len(frames[0]):
             l.append(frames[0][i])
             r.append(frames[1][i])
-            i = i + 1
-            slice_counter = slice_counter + 1
+            i += 1
+            slice_counter += 1
             if (i == len(frames[0])) or slice_counter == min_on_slice:
                 min_frame_l = min(l)
                 min_frame_r = min(r)
@@ -262,8 +263,8 @@ class Kavel:
         while i < len(frames[0]):
             l.append(frames[0][i])
             r.append(frames[1][i])
-            i = i + 1
-            slice_counter = slice_counter + 1
+            i += 1
+            slice_counter += 1
             if (i == len(frames[0])) or slice_counter == average_on_slice:
                 average_frame_l = sum(l) / len(l)
                 average_frame_r = sum(r) / len(r)
@@ -290,8 +291,8 @@ class Kavel:
         while i < len(frames[0]):
             l.append(frames[0][i])
             r.append(frames[1][i])
-            i = i + 1
-            slice_counter = slice_counter + 1
+            i += 1
+            slice_counter += 1
             if (i == len(frames[0])) or slice_counter == on_slice:
                 calc_frame_l = median(l)
                 calc_frame_r = median(r)
@@ -308,41 +309,47 @@ class Kavel:
         return r_buf
     
     @staticmethod
-    def chop_every_on_frame(frames, chop_frames):
-        print('Chop on slice of {} frame'.format(chop_frames))
+    def chop_every_on_frame(frames, chop_on_frames, chop_size = 1):
+        print('Chop slice of {} frames on every {}'.format(chop_size, chop_on_frames))
         r_buf = [[], []]
         chop_counter = 0
+        chop_size_counter = 0
+
         for i in range(len(frames[0])):
-            if chop_counter != chop_frames:
+            if chop_size_counter < chop_size and chop_counter >= chop_on_frames:
+                chop_size_counter += 1
+            else:    
+                chop_counter = 0
+                chop_size_counter = 0
+
+            if chop_counter < chop_on_frames:
                 r_buf[0].append(frames[0][i])
                 r_buf[1].append(frames[1][i])
                 chop_counter += 1
-            else:
-                chop_counter = 0
         
         return r_buf
 
     @staticmethod
-    def duplicate_every_on_slize_frame(frames, duplicate_frames, duplications = 1):
-        print('Duplicate on slice of {} frame, do {} duplications'.format(duplicate_frames, duplications))
+    def duplicate_slice_on_frame(frames, duplications = 1, frame_slice = 1):
+        print('Duplicate slice of {} frame, do {} duplications'.format(frame_slice, duplications))
         r_buf = [[], []]
         dup_buf = [[], []]
-        duplicate_counter = 0
+        frame_slice_counter = 0
 
         for i in range(len(frames[0])):
             r_buf[0].append(frames[0][i])
             r_buf[1].append(frames[1][i])
             dup_buf[0].append(frames[0][i])
             dup_buf[1].append(frames[1][i])
-            if i == len(frames[0]) or duplicate_counter == duplicate_frames:
+            if i == len(frames[0])-1 or frame_slice_counter == frame_slice-1:
                 for r in range(duplications):
                     r_buf[0].extend(dup_buf[0])
                     r_buf[1].extend(dup_buf[1])
 
                 dup_buf = [[], []]
-                duplicate_counter = 0
+                frame_slice_counter = 0
             else:
-                duplicate_counter += 1
+                frame_slice_counter += 1
         
         return r_buf
 
@@ -356,7 +363,7 @@ class Kavel:
         for f in range(len(frames[0])):
             ar[b_c_l].append(frames[0][f])
             ar[b_c_r].append(frames[1][f])
-            i = i + 1
+            i += 1
             if i == braid_on:
                 if b_c_l == 0:
                     b_c_l = 1
@@ -381,7 +388,7 @@ class Kavel:
             r.append(frames[1][i])
             i = i + 1
             r_o = r_o + 1
-            if (i == len(frames[0])) or r_o == reverse_on:
+            if (i == len(frames[0])) or r_o == reverse_on-1:
                 if do_revers:
                     l = l[::-1]
                     r = r[::-1]
@@ -426,7 +433,7 @@ class Kavel:
         for i in range(len(frames[0])):
             dup_buf[0].append(frames[0][i])
             dup_buf[1].append(frames[1][i])
-            if i == len(frames[0]) or sort_counter == sort_size:
+            if i == len(frames[0]) or sort_counter == sort_size-1:
                 if (sort_type == SortTypes.ASC) or (sort_type == SortTypes.MIX and mix_changer):
                     dup_buf[0] = sorted(dup_buf[0])
                     dup_buf[1] = sorted(dup_buf[1])
@@ -696,8 +703,9 @@ if __name__ == "__main__":
     input_mani_options.add_option("--average_on_slice", dest="average_on_slice", help="Change all frames on slice to the average value in frame slice", type="int", default=0)
     input_mani_options.add_option("--median_on_slice", dest="median_on_slice", help="Change all frames on slice to the median value in frame slice", type="int", default=0)
     input_mani_options.add_option("--chop", dest="chop_frames", help="Chop frames", type="int", default=0)
-    input_mani_options.add_option("--duplicate", dest="duplicate_frames", help="Duplicate frames, value is slice size", type="int", default=0)
-    input_mani_options.add_option("--duplicate_counter", dest="duplicate_counter", help="Do number of duplications frames, default is 1", type="int", default=1)
+    input_mani_options.add_option("--chop_slice", dest="chop_slice", help="Chop slice of frames", type="int", default=1)
+    input_mani_options.add_option("--duplicate", dest="duplicate_counter", help="Duplicate frames, value is how many times", type="int", default=0)
+    input_mani_options.add_option("--duplicate_slice", dest="duplicate_slice", help="Duplicat frame slice, default is 1 frame", type="int", default=1)
     input_mani_options.add_option("--sort_asc", dest="sort_asc", help="Sort frame slice ascended, value is slice size", type="int", default=0)
     input_mani_options.add_option("--sort_desc", dest="sort_desc", help="Sort frame slice descending, value is slice size", type="int", default=0)
     input_mani_options.add_option("--sort_mixed", dest="sort_mixed", help="Sort frame slice mixed descending and ascended, value is slice size", type="int", default=0)
@@ -759,8 +767,9 @@ if __name__ == "__main__":
         options.average_on_slice,
         options.median_on_slice,
         options.chop_frames,
-        options.duplicate_frames,
+        options.chop_slice,
         options.duplicate_counter,
+        options.duplicate_slice,
         options.sort_asc,
         options.sort_desc,
         options.sort_mixed,
