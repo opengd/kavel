@@ -1,0 +1,52 @@
+name: Build main
+
+on:
+
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    
+    - name: Checkout project
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    
+    - name: Calculate new version from previous tags
+      uses: paulhatch/semantic-version@v4.0.2
+      id: app-version
+      with:
+        tag_prefix: ""
+        format: "${major}.${minor}.${patch}.${increment}"
+        bump_each_commit: true
+    
+    - name: New version
+      run : |
+        echo "AssemblySemVer: ${{ steps.app-version.outputs.version }}"
+
+    - name: Analyze Tags
+      uses: Dotunj/github-action-analyze-tags@v0.2.0
+      id: current-app-version
+
+    - name: New version
+      run : |
+        echo "AssemblySemVer: ${{ steps.current-app-version.outputs.highest_tag }}"
+
+    - name: New version
+      run : |
+        echo ${{ steps.app-version.outputs.version == steps.current-app-version.outputs.highest_tag }}
+      
+    - name: Create new version tag
+      uses: actions/github-script@v5
+      if: github.event_name != 'pull_request' && !${{ steps.app-version.outputs.version == steps.current-app-version.outputs.highest_tag }}
+      with:
+        script: |
+            github.rest.git.createRef({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            ref: 'refs/tags/${{ steps.app-version.outputs.version }}',
+            sha: context.sha
+            })
