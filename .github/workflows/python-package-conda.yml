@@ -41,7 +41,7 @@ jobs:
       
     - name: Create new version tag
       uses: actions/github-script@v5
-      if: github.event_name != 'pull_request'  && !${{ steps.app-version.outputs.version == steps.current-app-version.outputs.highest_tag }}
+      if: ${{ github.event_name != 'pull_request' && steps.app-version.outputs.version != steps.current-app-version.outputs.highest_tag }}
       with:
         script: |
             github.rest.git.createRef({
